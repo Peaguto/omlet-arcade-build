@@ -1,0 +1,247 @@
+name: Build Omlet Arcade Modded APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_domain:
+        description: 'Server domain (e.g., http://192.168.1.12:8000)'
+        required: true
+        default: 'http://192.168.1.12:8000'
+      api_key:
+        description: 'API Key for server auth'
+        required: true
+        default: 'omlet-local-key-2024'
+      api_secret:
+        description: 'API Secret for server auth'
+        required: true
+        default: 'omlet-local-secret-2024'
+
+env:
+  ORIGINAL_APK_URL: 'https://github.com/user/omlet-arcade-build/releases/download/assets/omlet-arcade-1-111-9.apk'
+  # NOTE: You need to upload the original APK to GitHub Releases or host it somewhere
+  # For now, the workflow expects it in the repo root or as a release asset
+
+jobs:
+  build:
+    name: Build Modded APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ============================================================
+      # 1. Checkout & Setup
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 31
+          ndk-version: r26c
+          build-tools-version: '34.0.0'
+          cmdline-tools-version: 'latest'
+
+      - name: Install apktool
+        run: |
+          sudo apt-get update && sudo apt-get install -y apktool
+          apktool --version
+
+      - name: Install zipalign & apksigner
+        run: |
+          # Already in Android SDK build-tools
+          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
+
+      # ============================================================
+      # 2. Get Original APK
+      # ============================================================
+      - name: Download original APK
+        id: download_apk
+        run: |
+          # Option A: If you host the APK elsewhere, use wget/curl
+          # wget -q "$ORIGINAL_APK_URL" -O omlet-arcade-1-111-9.apk
+
+          # Option B: If committed to repo (large file - use Git LFS)
+          if [ -f "omlet-arcade-1-111-9.apk" ]; then
+            echo "APK found in repo"
+          else
+            echo "::warning::Original APK not found! Please:"
+            echo "  1. Upload to GitHub Releases as 'omlet-arcade-1-111-9.apk'"
+            echo "  2. Or add to repo with Git LFS"
+            echo "  3. Or host elsewhere and update ORIGINAL_APK_URL"
+            exit 1
+          fi
+
+      # ============================================================
+      # 3. Decode APK with apktool
+      # ============================================================
+      - name: Decode APK
+        run: |
+          apktool d -f omlet-arcade-1-111-9.apk -o omlet-build
+
+      # ============================================================
+      # 4. Apply Modifications
+      # ============================================================
+      - name: Apply AndroidManifest.xml
+        run: |
+          cp omlet-modifications/AndroidManifest.xml omlet-build/AndroidManifest.xml
+          # Replace placeholders with secrets
+          sed -i "s|YOUR_SERVER_DOMAIN_HERE|${{ github.event.inputs.server_domain || env.SERVER_DOMAIN }}|g" omlet-build/AndroidManifest.xml
+          sed -i "s|YOUR_API_KEY|${{ github.event.inputs.api_key || env.API_KEY }}|g" omlet-build/AndroidManifest.xml
+          sed -i "s|YOUR_API_SECRET|${{ github.event.inputs.api_secret || env.API_SECRET }}|g" omlet-build/AndroidManifest.xml
+
+      - name: Apply network_security_config.xml
+        run: |
+          mkdir -p omlet-build/res/xml
+          cp omlet-modifications/network_security_config.xml omlet-build/res/xml/network_security_config.xml
+          sed -i "s|YOUR_SERVER_DOMAIN_HERE|${{ github.event.inputs.server_domain || env.SERVER_DOMAIN }}|g" omlet-build/res/xml/network_security_config.xml
+
+      - name: Apply string resources
+        run: |
+          mkdir -p omlet-build/res/values
+          cp omlet-modifications/res/values/strings_config.xml omlet-build/res/values/strings_config.xml
+
+      - name: Apply layout
+        run: |
+          mkdir -p omlet-build/res/layout
+          cp omlet-modifications/res/layout/activity_config_server.xml omlet-build/res/layout/activity_config_server.xml
+
+      # ============================================================
+      # 5. Apply Smali Patches
+      # ============================================================
+      - name: Patch Application class (z0/b.smali)
+        run: |
+          # Patch the known Application class to launch ConfigServerActivity
+          APP_CLASS="omlet-build/smali/z0/b.smali"
+          if [ -f "$APP_CLASS" ]; then
+            echo "Patching $APP_CLASS..."
+            # Check if already patched
+            if grep -q "ConfigServerActivity" "$APP_CLASS"; then
+              echo "Already patched"
+            else
+              # Find attachBaseContext and insert patch after super call
+              python3 << 'EOF'
+import re
+
+with open("omlet-build/smali/z0/b.smali", "r") as f:
+    content = f.read()
+
+# Find attachBaseContext method
+match = re.search(
+    r'(\.method protected attachBaseContext\(Landroid/content/Context;\)V\s*\n)(.*?)(\.end method)',
+    content, re.DOTALL
+)
+
+if match:
+    body = match.group(2)
+    # Find super.attachBaseContext call
+    super_match = re.search(r'invoke-super \{p0, p1\}, Landroid/content/ContextWrapper;->attachBaseContext\(Landroid/content/Context;\)V', body)
+    if super_match:
+        insert_pos = match.start(2) + super_match.end()
+        patch_code = """
+    # ---- ConfigServerActivity Launch Patch ----
+    invoke-static {p0}, Lmobisocial/arcade/ConfigServerActivity;->isConfigured(Landroid/content/Context;)Z
+    move-result v0
+    if-nez v0, :config_already_set
+
+    new-instance v1, Landroid/content/Intent;
+    const-class v2, Lmobisocial/arcade/ConfigServerActivity;
+    invoke-direct {v1, p0, v2}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
+    const/high16 v2, 0x1000
+    invoke-virtual {v1, v2}, Landroid/content/Intent;->setFlags(I)Landroid/content/Intent;
+    invoke-virtual {p0, v1}, Landroid/app/Application;->startActivity(Landroid/content/Intent;)V
+
+    :config_already_set
+    # ---- End Patch ----
+"""
+        new_content = content[:insert_pos] + patch_code + content[insert_pos:]
+        with open("omlet-build/smali/z0/b.smali", "w") as f:
+            f.write(new_content)
+        print("Patched successfully")
+    else:
+        print("ERROR: Could not find super.attachBaseContext")
+else:
+    print("ERROR: Could not find attachBaseContext method")
+EOF
+            fi
+          else
+            echo "WARNING: Application class not found at $APP_CLASS"
+          fi
+
+      # ============================================================
+      # 6. Build ConfigServerActivity DEX (Gradle)
+      # ============================================================
+      - name: Build ConfigServerActivity DEX
+        run: |
+          cd ConfigServerActivity_AndroidStudio_Project
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          # Copy generated DEX
+          cp app/build/intermediates/dex/debug/classes.dex ../omlet-build/classes2.dex
+          cd ..
+
+      # ============================================================
+      # 7. Create debug keystore
+      # ============================================================
+      - name: Create debug keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -storepass android -keypass android -noprompt
+
+      # ============================================================
+      # 8. Rebuild APK
+      # ============================================================
+      - name: Rebuild APK with apktool
+        run: |
+          apktool b omlet-build -o omlet-mod.apk.unsigned
+
+      - name: Align APK
+        run: |
+          zipalign -f -p 4 omlet-mod.apk.unsigned omlet-mod.apk.aligned
+
+      - name: Sign APK
+        run: |
+          apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
+            --out omlet-arcade-mod.apk omlet-mod.apk.aligned
+
+      - name: Verify signature
+        run: |
+          apksigner verify omlet-arcade-mod.apk
+
+      # ============================================================
+      # 9. Upload Artifact
+      # ============================================================
+      - name: Upload modded APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: omlet-arcade-mod-apk
+          path: omlet-arcade-mod.apk
+          retention-days: 30
+
+      # ============================================================
+      # 10. Summary
+      # ============================================================
+      - name: Build Summary
+        run: |
+          echo "## ✅ Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| APK | \`omlet-arcade-mod.apk\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Server | `${{ github.event.inputs.server_domain || env.SERVER_DOMAIN }}` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | $(du -h omlet-arcade-mod.apk | cut -f1) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download artifact from Actions page" >> $GITHUB_STEP_SUMMARY
+          echo "2. Install on device: \`adb install omlet-arcade-mod.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Configure server in app on first launch" >> $GITHUB_STEP_SUMMARY

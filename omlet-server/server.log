@@ -1,0 +1,7 @@
+INFO:     Started server process [27800]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+C:\Users\esqui\OneDrive\Documentos\Omlet\omlet-server\main.py:324: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.utcnow().isoformat()
+INFO:     127.0.0.1:53932 - "GET /api/v1/health HTTP/1.1" 200 OK

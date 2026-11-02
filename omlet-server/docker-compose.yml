@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  omlet-server:
+    build: .
+    container_name: omlet-server
+    ports:
+      - "8000:8000"   # API
+      - "1935:1935"   # RTMP
+      - "8888:8888"   # HLS
+      - "8889:8889"   # WebRTC
+      - "9997:9997"   # MediaMTX API
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8000
+      - API_KEY=${API_KEY:-omlet-custom-server-key}
+      - API_SECRET=${API_SECRET:-omlet-custom-server-secret}
+      - MEDIA_DIR=/app/media
+    volumes:
+      - ./media:/app/media
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Redis for scaling (not needed for personal use)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   redis_data:

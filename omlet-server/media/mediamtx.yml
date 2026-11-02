@@ -1,0 +1,24 @@
+
+# MediaMTX configuration for Omlet Arcade
+api:
+  address: :9997
+
+rtmp:
+  address: :1935
+
+hls:
+  address: :8888
+  segmentDuration: 2s
+  segmentCount: 5
+  directory: media/hls
+  encryption: no
+
+webrtc:
+  address: :8889
+
+paths:
+  all:
+    source: publisher
+    runOnInit: ""
+    runOnDemand: ""
+    overridePublisher: true

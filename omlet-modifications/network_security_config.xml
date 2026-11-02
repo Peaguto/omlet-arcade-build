@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext for local development and custom server -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Allow localhost for local testing -->
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- Allow custom server domain (configured at runtime) -->
+        <domain includeSubdomains="true">YOUR_SERVER_DOMAIN_HERE</domain>
+        <domain includeSubdomains="true">arcade.YOUR_SERVER_DOMAIN_HERE</domain>
+        <domain includeSubdomains="true">api.YOUR_SERVER_DOMAIN_HERE</domain>
+        <domain includeSubdomains="true">media.YOUR_SERVER_DOMAIN_HERE</domain>
+        <domain includeSubdomains="true">chat.YOUR_SERVER_DOMAIN_HERE</domain>
+    </domain-config>
+
+    <!-- Default config for other domains -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Debug overrides - allows certificate inspection in debug mode -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Config Server Activity Strings -->
+    <string name="config_server_title">Configurar Servidor Omlet</string>
+    <string name="config_server_subtitle">Insira as informações do seu servidor personalizado para conectar o aplicativo.</string>
+    <string name="config_server_url_hint">URL do Servidor (ex: https://meu-servidor.com)</string>
+    <string name="config_api_key_hint">API Key (opcional)</string>
+    <string name="config_api_secret_hint">API Secret (opcional)</string>
+    <string name="config_test_connection">Testar Conexão</string>
+    <string name="config_save">Salvar e Continuar</string>
+    <string name="config_server_footer">Omlet Arcade Modificado v1.111.9-mod\nServidor pessoal - Apenas para uso próprio</string>
+
+    <!-- App name (override if needed) -->
+    <string name="oma_arcade_name">Omlet Arcade</string>
+</resources>
