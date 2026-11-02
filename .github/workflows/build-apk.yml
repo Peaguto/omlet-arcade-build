@@ -43,7 +43,7 @@ jobs:
           ls -la omlet-arcade-1-111-9.apk
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -51,20 +51,19 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          api-level: 31
-          ndk-version: r26c
-          build-tools-version: '34.0.0'
           cmdline-tools-version: 'latest'
+          packages: 'platforms;android-31 build-tools;34.0.0 ndk;26.1.10909125'
 
       - name: Install apktool
         run: |
           sudo apt-get update && sudo apt-get install -y apktool
           apktool --version
 
-      - name: Install zipalign & apksigner
+      - name: Verify build tools
         run: |
-          # Already in Android SDK build-tools
-          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
+          ls -la $ANDROID_HOME/build-tools/
+          which zipalign
+          which apksigner
 
       # ============================================================
       # 2. Get Original APK
