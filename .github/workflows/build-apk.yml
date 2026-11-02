@@ -35,6 +35,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          fetch-depth: 0
+
+      - name: Ensure LFS files downloaded
+        run: |
+          git lfs pull
+          ls -la omlet-arcade-1-111-9.apk
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -117,64 +123,13 @@ jobs:
       # ============================================================
       # 5. Apply Smali Patches
       # ============================================================
+      - name: Copy patch script
+        run: |
+          cp patch_smali.py omlet-build/patch_smali.py
+
       - name: Patch Application class (z0/b.smali)
         run: |
-          # Patch the known Application class to launch ConfigServerActivity
-          APP_CLASS="omlet-build/smali/z0/b.smali"
-          if [ -f "$APP_CLASS" ]; then
-            echo "Patching $APP_CLASS..."
-            # Check if already patched
-            if grep -q "ConfigServerActivity" "$APP_CLASS"; then
-              echo "Already patched"
-            else
-              # Find attachBaseContext and insert patch after super call
-              python3 << 'EOF'
-import re
-
-with open("omlet-build/smali/z0/b.smali", "r") as f:
-    content = f.read()
-
-# Find attachBaseContext method
-match = re.search(
-    r'(\.method protected attachBaseContext\(Landroid/content/Context;\)V\s*\n)(.*?)(\.end method)',
-    content, re.DOTALL
-)
-
-if match:
-    body = match.group(2)
-    # Find super.attachBaseContext call
-    super_match = re.search(r'invoke-super \{p0, p1\}, Landroid/content/ContextWrapper;->attachBaseContext\(Landroid/content/Context;\)V', body)
-    if super_match:
-        insert_pos = match.start(2) + super_match.end()
-        patch_code = """
-    # ---- ConfigServerActivity Launch Patch ----
-    invoke-static {p0}, Lmobisocial/arcade/ConfigServerActivity;->isConfigured(Landroid/content/Context;)Z
-    move-result v0
-    if-nez v0, :config_already_set
-
-    new-instance v1, Landroid/content/Intent;
-    const-class v2, Lmobisocial/arcade/ConfigServerActivity;
-    invoke-direct {v1, p0, v2}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
-    const/high16 v2, 0x1000
-    invoke-virtual {v1, v2}, Landroid/content/Intent;->setFlags(I)Landroid/content/Intent;
-    invoke-virtual {p0, v1}, Landroid/app/Application;->startActivity(Landroid/content/Intent;)V
-
-    :config_already_set
-    # ---- End Patch ----
-"""
-        new_content = content[:insert_pos] + patch_code + content[insert_pos:]
-        with open("omlet-build/smali/z0/b.smali", "w") as f:
-            f.write(new_content)
-        print("Patched successfully")
-    else:
-        print("ERROR: Could not find super.attachBaseContext")
-else:
-    print("ERROR: Could not find attachBaseContext method")
-EOF
-            fi
-          else
-            echo "WARNING: Application class not found at $APP_CLASS"
-          fi
+          python3 omlet-build/patch_smali.py omlet-build/smali/z0/b.smali
 
       # ============================================================
       # 6. Build ConfigServerActivity DEX (Gradle)
