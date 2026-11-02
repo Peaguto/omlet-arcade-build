@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "mobisocial.arcade"
-    compileSdk = 31
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "mobisocial.arcade.configserver"
         minSdk = 24
-        targetSdk = 31
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
