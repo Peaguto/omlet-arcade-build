@@ -59,11 +59,18 @@ jobs:
           sudo apt-get update && sudo apt-get install -y apktool
           apktool --version
 
+      - name: Add build-tools to PATH
+        run: |
+          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+
       - name: Verify build tools
         run: |
           ls -la $ANDROID_HOME/build-tools/
           which zipalign
           which apksigner
+          zipalign --help | head -1
+          apksigner --help | head -1
 
       # ============================================================
       # 2. Get Original APK
